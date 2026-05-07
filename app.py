@@ -5,7 +5,7 @@ import os
 
 app = Flask(__name__)
 
-# ✅ FIX CORS (GitHub Pages + Render)
+# Allow frontend (GitHub Pages)
 CORS(app, origins="*")
 
 @app.route('/')
@@ -15,14 +15,14 @@ def home():
 @app.route('/convert', methods=['POST'])
 def convert():
 
-    if 'file' not in request.files:
-        return jsonify({"success": False, "error": "No file uploaded"}), 400
-
-    file = request.files['file']
-
-    text = ""
-
     try:
+        if 'file' not in request.files:
+            return jsonify({"success": False, "error": "No file uploaded"}), 400
+
+        file = request.files['file']
+
+        text = ""
+
         with pdfplumber.open(file) as pdf:
             for page in pdf.pages:
                 extracted = page.extract_text()
@@ -43,4 +43,4 @@ def convert():
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host="0.0.0.0", port=port)
