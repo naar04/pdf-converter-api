@@ -1,6 +1,13 @@
 flask
 flask-cors
 pdfplumber
+pytesseract
+pdf2image
+pillow
+pandas
+openpyxl
+python-docx
+reportlab
 gunicorn
 beautifulsoup4==4.14.3
 blinker==1.9.0
