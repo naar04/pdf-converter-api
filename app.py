@@ -6,6 +6,7 @@ import pytesseract
 import pandas as pd
 import os
 import uuid
+import io
 
 from pdf2image import convert_from_bytes
 from docx import Document
@@ -13,23 +14,50 @@ from reportlab.pdfgen import canvas
 
 app = Flask(__name__)
 
-# Enable CORS
-CORS(app)
+# VERY IMPORTANT
+CORS(
+    app,
+    resources={r"/*": {"origins": "*"}},
+    supports_credentials=True
+)
 
-# Create outputs folder
 OUTPUT_FOLDER = "outputs"
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
-@app.route("/")
+@app.route("/", methods=["GET"])
 def home():
-    return "PDF Converter SaaS Running"
 
-@app.route("/convert", methods=["POST"])
+    return jsonify({
+        "status": "running"
+    })
+
+@app.route("/convert", methods=["POST", "OPTIONS"])
 def convert():
+
+    # HANDLE PREFLIGHT
+    if request.method == "OPTIONS":
+
+        response = jsonify({"success": True})
+
+        response.headers.add(
+            "Access-Control-Allow-Origin",
+            "*"
+        )
+
+        response.headers.add(
+            "Access-Control-Allow-Headers",
+            "*"
+        )
+
+        response.headers.add(
+            "Access-Control-Allow-Methods",
+            "*"
+        )
+
+        return response
 
     try:
 
-        # Check file
         if "file" not in request.files:
 
             return jsonify({
@@ -39,21 +67,17 @@ def convert():
 
         file = request.files["file"]
 
-        # Output format
-        output_format = request.form.get("format", "txt")
+        output_format = request.form.get(
+            "format",
+            "txt"
+        )
 
-        # Read PDF bytes
         pdf_bytes = file.read()
 
         text = ""
 
-        # ===================================================
-        # NORMAL PDF TEXT EXTRACTION
-        # ===================================================
-
+        # NORMAL TEXT EXTRACTION
         try:
-
-            import io
 
             pdf_stream = io.BytesIO(pdf_bytes)
 
@@ -69,12 +93,9 @@ def convert():
 
         except Exception as e:
 
-            print("PDFPlumber Error:", e)
+            print("PDF ERROR:", e)
 
-        # ===================================================
-        # OCR FALLBACK FOR SCANNED PDFs
-        # ===================================================
-
+        # OCR FALLBACK
         if not text.strip():
 
             try:
@@ -94,20 +115,12 @@ def convert():
                     "error": f"OCR failed: {str(e)}"
                 })
 
-        # ===================================================
-        # NO TEXT FOUND
-        # ===================================================
-
         if not text.strip():
 
             return jsonify({
                 "success": False,
-                "error": "No readable text found in PDF"
+                "error": "No readable text found"
             })
-
-        # ===================================================
-        # GENERATE FILE
-        # ===================================================
 
         filename = str(uuid.uuid4())
 
@@ -116,7 +129,11 @@ def convert():
 
             output_path = f"{OUTPUT_FOLDER}/{filename}.txt"
 
-            with open(output_path, "w", encoding="utf-8") as f:
+            with open(
+                output_path,
+                "w",
+                encoding="utf-8"
+            ) as f:
 
                 f.write(text)
 
@@ -125,22 +142,30 @@ def convert():
 
             output_path = f"{OUTPUT_FOLDER}/{filename}.csv"
 
-            lines = text.split("\n")
+            df = pd.DataFrame(
+                text.split("\n"),
+                columns=["Text"]
+            )
 
-            df = pd.DataFrame(lines, columns=["Text"])
-
-            df.to_csv(output_path, index=False)
+            df.to_csv(
+                output_path,
+                index=False
+            )
 
         # EXCEL
         elif output_format == "excel":
 
             output_path = f"{OUTPUT_FOLDER}/{filename}.xlsx"
 
-            lines = text.split("\n")
+            df = pd.DataFrame(
+                text.split("\n"),
+                columns=["Text"]
+            )
 
-            df = pd.DataFrame(lines, columns=["Text"])
-
-            df.to_excel(output_path, index=False)
+            df.to_excel(
+                output_path,
+                index=False
+            )
 
         # WORD
         elif output_format == "word":
@@ -149,7 +174,10 @@ def convert():
 
             doc = Document()
 
-            doc.add_heading("Converted PDF", level=1)
+            doc.add_heading(
+                "Converted PDF",
+                level=1
+            )
 
             doc.add_paragraph(text)
 
@@ -176,44 +204,55 @@ def convert():
 
             return jsonify({
                 "success": False,
-                "error": "Invalid output format"
+                "error": "Invalid format"
             })
 
-        # ===================================================
-        # DOWNLOAD URL
-        # ===================================================
-
-        download_url = f"/download/{os.path.basename(output_path)}"
-
-        return jsonify({
+        response = jsonify({
             "success": True,
-            "download_url": download_url,
+            "download_url":
+            f"/download/{os.path.basename(output_path)}",
             "text_preview": text[:5000]
         })
 
+        response.headers.add(
+            "Access-Control-Allow-Origin",
+            "*"
+        )
+
+        return response
+
     except Exception as e:
 
-        return jsonify({
+        response = jsonify({
             "success": False,
             "error": str(e)
         })
 
-# ===================================================
-# DOWNLOAD ROUTE
-# ===================================================
+        response.headers.add(
+            "Access-Control-Allow-Origin",
+            "*"
+        )
 
-@app.route("/download/<filename>")
+        return response
+
+@app.route("/download/<filename>", methods=["GET"])
 def download(filename):
 
-    file_path = os.path.join(OUTPUT_FOLDER, filename)
+    path = os.path.join(
+        OUTPUT_FOLDER,
+        filename
+    )
 
-    return send_file(
-        file_path,
+    response = send_file(
+        path,
         as_attachment=True
     )
 
-# ===================================================
-# IMPORTANT FOR RENDER + DOCKER
-# ===================================================
+    response.headers.add(
+        "Access-Control-Allow-Origin",
+        "*"
+    )
+
+    return response
 
 app = app
