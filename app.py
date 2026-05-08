@@ -15,7 +15,7 @@ from reportlab.pdfgen import canvas
 app = Flask(__name__)
 
 # =========================================================
-# CORS
+# ENABLE CORS
 # =========================================================
 
 CORS(
@@ -33,7 +33,7 @@ OUTPUT_FOLDER = "outputs"
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 # =========================================================
-# HOME
+# HOME ROUTE
 # =========================================================
 
 @app.route("/", methods=["GET"])
@@ -50,7 +50,7 @@ def home():
 @app.route("/convert", methods=["POST", "OPTIONS"])
 def convert():
 
-    # HANDLE PREFLIGHT REQUEST
+    # HANDLE PREFLIGHT
     if request.method == "OPTIONS":
 
         response = jsonify({
@@ -103,7 +103,7 @@ def convert():
         text = ""
 
         # =================================================
-        # NORMAL TEXT EXTRACTION
+        # NORMAL PDF TEXT EXTRACTION
         # =================================================
 
         try:
@@ -134,14 +134,14 @@ def convert():
 
                 images = convert_from_bytes(
                     pdf_bytes,
-                    dpi=70,
+                    dpi=120,
                     grayscale=True,
                     fmt="jpeg",
-                    single_file=True,
                     thread_count=1,
-                    size=(800, None)
+                    size=(1400, None)
                 )
 
+                # LIMIT LARGE PDFs
                 if len(images) > 3:
 
                     return jsonify({
@@ -151,12 +151,14 @@ def convert():
 
                 for image in images:
 
-                    # REDUCE MEMORY
-                    image.thumbnail((800, 800))
+                    # REDUCE MEMORY SAFELY
+                    image.thumbnail((1400, 1400))
 
+                    # BETTER OCR SETTINGS
                     ocr_text = pytesseract.image_to_string(
                         image,
-                        config='--oem 1 --psm 6'
+                        lang="eng",
+                        config='--oem 3 --psm 4'
                     )
 
                     text += ocr_text + "\n"
@@ -183,7 +185,7 @@ def convert():
             })
 
         # =================================================
-        # CREATE OUTPUT FILE
+        # GENERATE OUTPUT FILE
         # =================================================
 
         filename = str(uuid.uuid4())
@@ -314,7 +316,7 @@ def convert():
         return response
 
 # =========================================================
-# DOWNLOAD FILE
+# DOWNLOAD ROUTE
 # =========================================================
 
 @app.route("/download/<filename>", methods=["GET"])
@@ -338,7 +340,7 @@ def download(filename):
     return response
 
 # =========================================================
-# IMPORTANT FOR RENDER
+# IMPORTANT FOR GUNICORN
 # =========================================================
 
 app = app
